@@ -60,5 +60,5 @@ Basic wireframe for the UI design reference can be found at [Figma link](https:/
 ## Backend
 
 - Have attached the doc with requests and expected json responses along with the problem.
-- Stick those schema. Cause our automation test suite will hit them.
+- Stick with that api schema. Cause our automation test suite will hit assuming the same.
 - You can choose whatever database you want. If you are choosing to use a managed service, make sure your db is clean before submitting the assignment so that automated test suite works properly.

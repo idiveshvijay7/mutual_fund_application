@@ -83,6 +83,6 @@ After clicking on the required button you will be redirected back to the configu
 
 ## Inconsistent server
 
-By intentional you will receive Internal server error while making the requests. For payment callback after making the payment, you might receive internal server error, but the payment status will be properly updated at backend. You can control the behavior this error using `ERROR_RATE` environment variable
+We have configured servers in a way that by default nature you will receive Internal server error while making the requests. For payment callback after making the payment, you might receive internal server error, but the payment status will be properly updated at backend. You can control the behavior this error using `ERROR_RATE` environment variable
 
 Postman collection is added for reference

@@ -60,7 +60,7 @@ Response -
 }
 ```
 
-You have to make a successful payment to create an order. Payment Id should be passed along with the create request to create the order. If Payment is not successful, order will fail. If rta service not able to connect to payment gateway the order will again fail. When you submit the order, you will get the order details, rta serice will take some time to process the order. You can control that time via environment variable `PROCESS_ORDER_RATE` (value in seconds). At the time of processing order, based on the nav the units will be allotted.
+You have to make a successful payment to create an order. Payment Id should be passed along with the create request to create the order. If Payment is not successful, order will fail. If rta service is not able to connect to payment gateway the order will fail. When you submit the order, you will get the order details, rta serice will take some time to process the order. You can control that time via environment variable `PROCESS_ORDER_RATE` (value in seconds). At the time of processing order, based on the nav the units will be allotted.
 You can keep calling fetch order to get the latest status of the order.
 
 ### Fetch Order
@@ -99,6 +99,6 @@ Market value get updated by a thread. You can control rate at which it shoudl ch
 
 ## Inconsistent server
 
-By intentional you will receive Internal server error while making the requests. For payment callback after making the payment, you might receive internal server error, but the payment status will be properly updated at backend. You can control the behavior this error using `ERROR_RATE` environment variable
+We have configured servers in a way that by default nature you will receive Internal server error while making the requests. For payment callback after making the payment, you might receive internal server error, but the payment status will be properly updated at backend. You can control the behavior this error using `ERROR_RATE` environment variable
 
 Postman collection is added for reference
