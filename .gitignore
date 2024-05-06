@@ -1,3 +1,4 @@
 .env
 payments.db
 orders.db
+node_modules

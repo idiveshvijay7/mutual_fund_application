@@ -63,6 +63,7 @@ func initializeDatabase() (*sql.DB, error) {
 		ifsc_code TEXT,
 		amount INTEGER,
 		redirect_url TEXT,
+		strategy_name TEXT,
 		status TEXT DEFAULT 'Created',
 		UTR TEXT,
 		date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -96,10 +97,27 @@ func (a *App) Run() {
 	mux.HandleFunc("GET /payment/{id}", randomFailureMiddleware(a.getPayment))
 	mux.HandleFunc("GET /payment/pg/{id}", randomFailureMiddleware(a.paymentExecuteHandler))
 	mux.HandleFunc("GET /payment/callback/{id}", a.paymentCallbackHandler)
+
+	handler := allowCORS(mux)
+
 	log.Default().Println("Server started at :8080")
-	err := http.ListenAndServe(":8080", mux)
+	err := http.ListenAndServe(":8080", handler)
 	if err != nil {
 		log.Fatal(err)
+	}
+}
+
+// CORS middleware handler
+func allowCORS(h http.Handler) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		h.ServeHTTP(w, r)
 	}
 }
 
@@ -109,6 +127,7 @@ type PaymentRequest struct {
 	IfscCode      string  `json:"ifscCode"`
 	Amount        int64   `json:"amount"`
 	RedirectUrl   string  `json:"redirectUrl"`
+	Strategy_name string  `json:"strategyName"`
 	Status        string  `json:"status"`
 	CreatedAt     string  `json:"createdAt"`
 	Utr           *string `json:"utr"`
@@ -122,7 +141,7 @@ func (a *App) generatePaymentLinkHandler(w http.ResponseWriter, r *http.Request)
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
-
+	// log.Default().Println("Error")
 	// Generate the payment link using the bank account number and IFSC code
 	paymentLink, err := a.generatePaymentLink(paymentReq)
 	if err != nil {
@@ -145,10 +164,13 @@ func (a *App) generatePaymentLink(req PaymentRequest) (string, error) {
 	transactionID := uuid.New().String()
 
 	// store the details in a sql database
-	_, err := a.db.Exec(`INSERT INTO payments (uuid, account_number, ifsc_code, amount, redirect_url, status) VALUES (?, ?, ?, ?, ?, ?)`, transactionID, req.AccountNumber, req.IfscCode, req.Amount, req.RedirectUrl, "Created")
+	// Insert the payment details into the database
+	_, err := a.db.Exec(`INSERT INTO payments (uuid, account_number, ifsc_code, amount, redirect_url, strategy_name, status) VALUES (?, ?, ?, ?, ?, ?, ?)`, transactionID, req.AccountNumber, req.IfscCode, req.Amount, req.RedirectUrl, req.Strategy_name, "Created")
 	if err != nil {
+		log.Printf("Error inserting payment details into database: %v\n", err)
 		return "", fmt.Errorf("error inserting payment details into database: %w", err)
 	}
+
 
 	// Construct the payment URL
 	paymentLink := a.baseURL + "/payment/pg/" + transactionID
@@ -163,7 +185,7 @@ func (a *App) getPayment(w http.ResponseWriter, r *http.Request) {
 
 	// Query the database to get the payment details
 	var payment PaymentRequest
-	err := a.db.QueryRow("SELECT uuid, account_number, ifsc_code, amount, status, date, redirect_url, utr FROM payments WHERE uuid = ?", transactionID).Scan(&payment.ID, &payment.AccountNumber, &payment.IfscCode, &payment.Amount, &payment.Status, &payment.CreatedAt, &payment.RedirectUrl, &payment.Utr)
+	err := a.db.QueryRow("SELECT uuid, account_number, ifsc_code, amount, status, date, redirect_url, strategy_name, utr FROM payments WHERE uuid = ?", transactionID).Scan(&payment.ID, &payment.AccountNumber, &payment.IfscCode, &payment.Amount, &payment.Status, &payment.CreatedAt, &payment.RedirectUrl, &payment.Strategy_name, &payment.Utr)
 	if err != nil {
 		log.Default().Println(err)
 		http.Error(w, "Payment not found", http.StatusNotFound)
@@ -209,7 +231,7 @@ func (a *App) paymentExecuteHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) paymentCallbackHandler(w http.ResponseWriter, r *http.Request) {
-	// Get the transaction ID from the URL path
+	// Get the transaction ID from the URL 
 	transactionID := r.PathValue("id")
 	status := r.URL.Query().Get("status")
 
@@ -238,7 +260,9 @@ func (a *App) paymentCallbackHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var redirectUrl string
-	a.db.QueryRow("SELECT redirect_url FROM payments WHERE uuid = ?", transactionID).Scan(&redirectUrl)
+	var amount int64
+	var strategyName string
+	a.db.QueryRow("SELECT redirect_url, amount, strategy_name FROM payments WHERE uuid = ?", transactionID).Scan(&redirectUrl, &amount, &strategyName)
 
 	random := rand.Float64()
 
@@ -247,8 +271,18 @@ func (a *App) paymentCallbackHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Request failed", http.StatusInternalServerError)
 		return
 	}
+	if status == "success" {
+		// Construct the complete redirect URL for the investment success page
+		// redirectURL := redirectUrl + "/investmentSuccessful"
+		redirectURL := fmt.Sprintf("%s/investmentSuccessful?paymentId=%s&selectedStrategy=%s&amount=%d", redirectUrl, transactionID, strategyName, amount)
+		// Redirect to the investment success page
+		http.Redirect(w, r, redirectURL, http.StatusSeeOther)
+	} else {
+		// Redirect to the investment failure page
+		http.Redirect(w, r, redirectUrl + "/investmentFailure", http.StatusSeeOther)
+	}
 
-	http.Redirect(w, r, redirectUrl, http.StatusSeeOther)
+	// http.Redirect(w, r, redirectUrl, http.StatusSeeOther)
 }
 
 func randomFailureMiddleware(f func(w http.ResponseWriter, r *http.Request)) http.HandlerFunc {
